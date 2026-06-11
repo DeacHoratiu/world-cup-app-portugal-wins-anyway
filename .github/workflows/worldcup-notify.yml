@@ -2,20 +2,22 @@ name: World Cup notifications
 
 on:
   schedule:
-    # every 5 minutes (GitHub may delay runs by a few minutes at busy times)
-    - cron: "*/5 * * * *"
-  workflow_dispatch: {} # allows manual runs from the Actions tab (useful for testing)
+    # starts a new ~55-minute polling shift; GitHub cron is unreliable,
+    # so shifts overlap-queue via the concurrency group below
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {} # manual run = one single check (handy for testing)
 
 permissions:
   contents: write # needed to commit notifier/state.json back
 
 concurrency:
   group: worldcup-notify
-  cancel-in-progress: false
+  cancel-in-progress: false # new runs wait in line and take over when the current shift ends
 
 jobs:
   notify:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
 
@@ -23,10 +25,12 @@ jobs:
         with:
           node-version: 24
 
-      - name: Check scores and send ntfy alerts
+      - name: Poll scores and send ntfy alerts
         run: node notifier/notify.js
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          # scheduled runs poll every 60s for ~55 min; manual runs do a single check
+          LOOP_MINUTES: ${{ github.event_name == 'schedule' && '55' || '0' }}
 
       - name: Save notification state
         run: |
