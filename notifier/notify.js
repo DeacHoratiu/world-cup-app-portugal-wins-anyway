@@ -51,14 +51,11 @@ function teams(comp) {
   return { h, a };
 }
 
-(async () => {
-  const state = loadState();
-  const firstRun = !state.initialized;
-
+async function checkOnce(state, firstRun) {
   const res = await fetch(API);
   if (!res.ok) {
-    console.error(`ESPN API responded ${res.status} — skipping this run.`);
-    process.exit(0); // transient failure: don't fail the workflow
+    console.error(`ESPN API responded ${res.status} — skipping this check.`);
+    return;
   }
   const data = await res.json();
   const events = data.events || [];
@@ -102,6 +99,29 @@ function teams(comp) {
     state.phase[id] = st;
   }
 
+  state.initialized = true;
+  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+  console.log(`${new Date().toISOString()} · checked ${events.length} events`);
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+(async () => {
+  const state = loadState();
+  const firstRun = !state.initialized;
+
+  // GitHub's cron is best-effort and often very late, so instead of relying on
+  // it for frequency, each job stays alive for LOOP_MINUTES and polls every
+  // 60 seconds. The cron only has to start the next shift before this one ends.
+  const loopMinutes = Number(process.env.LOOP_MINUTES || 0);
+  const endAt = Date.now() + loopMinutes * 60 * 1000;
+
+  await checkOnce(state, firstRun); // firstRun only suppresses the very first check
+  while (Date.now() < endAt) {
+    await sleep(60 * 1000);
+    await checkOnce(state, false);
+  }
+
   if (firstRun) {
     // One-time confirmation so you know the whole chain works
     // (GitHub Secret → script → ntfy → phone) before the real alerts start.
@@ -111,9 +131,7 @@ function teams(comp) {
     );
   }
 
-  state.initialized = true;
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
-  console.log(`Run complete · ${events.length} events checked`);
+  console.log(`Shift complete · polled for ${loopMinutes} minute(s)`);
 })().catch((e) => {
   console.error(e);
   process.exit(0); // never hard-fail the cron on transient errors
