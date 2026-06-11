@@ -81,12 +81,12 @@ function teams(comp) {
     if (!firstRun && st === "pre" && !state.reminded[id] && now >= kick - REMIND_MS && now < kick) {
       state.reminded[id] = true;
       const inMin = Math.max(1, Math.round((kick - now) / 60000));
-      await notify("⚽ Începe în curând", `${hName} – ${aName} începe în ~${inMin} min${round ? " · " + round : ""}`);
+      await notify("⚽ Starting soon", `${hName} – ${aName} kicks off in ~${inMin} min${round ? " · " + round : ""}`);
     }
 
     // 2) match started
     if (!firstRun && st === "in" && prev === "pre") {
-      await notify("⚽ Meciul a început", `${hName} – ${aName} este în desfășurare`);
+      await notify("⚽ Kickoff", `${hName} – ${aName} is underway`);
     }
 
     // 3) final result
@@ -94,12 +94,21 @@ function teams(comp) {
       let score = `${hName} ${h.score} – ${a.score} ${aName}`;
       // include penalty shootout if present (knockout rounds)
       if (h.shootoutScore != null && a.shootoutScore != null) {
-        score += ` (${h.shootoutScore}–${a.shootoutScore} la penalty-uri)`;
+        score += ` (${h.shootoutScore}–${a.shootoutScore} on penalties)`;
       }
-      await notify("🏁 Rezultat final", score);
+      await notify("🏁 Full time", score);
     }
 
     state.phase[id] = st;
+  }
+
+  if (firstRun) {
+    // One-time confirmation so you know the whole chain works
+    // (GitHub Secret → script → ntfy → phone) before the real alerts start.
+    await notify(
+      "World Cup 2026 ✅",
+      "Notifications are set up correctly! You'll get alerts ~15 min before each match, at kickoff, and at full time with the score."
+    );
   }
 
   state.initialized = true;
