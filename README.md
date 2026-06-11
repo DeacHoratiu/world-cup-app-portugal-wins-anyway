@@ -22,7 +22,7 @@ Secret: your topic name (e.g. test1234123) — just the topic name, no URL
 
 
 Enable GitHub Pages. Settings → Pages → Source: "Deploy from a branch" → Branch: main, folder / (root) → Save. Within 1–2 minutes the site will be live at https://YOUR-USERNAME.github.io/worldcup-2026/.
-Start the notifications. Go to the Actions tab → enable workflows if GitHub prompts you → select "World Cup notifications" → click "Run workflow" for an initial test. The first run only snapshots the current state (no alerts sent); from the second run onwards you'll receive notifications for any changes.
+Start the notifications. Go to the Actions tab → enable workflows if GitHub prompts you → select "World Cup notifications" → click "Run workflow" for an initial test. The first run sends a confirmation notification so you know the setup works — from the second run onwards you'll receive alerts for upcoming matches.
 
 
 Good to know
