@@ -473,13 +473,28 @@ const ALIAS = {
   cotedivoire:"Ivory Coast", ivorycoast:"Ivory Coast",
   caboverde:"Cape Verde", capeverde:"Cape Verde", capeverdeislands:"Cape Verde",
   bosniaandherzegovina:"Bosnia & Herzegovina",
+  bosniaherzegovina:"Bosnia & Herzegovina",
+  bosniaherz:"Bosnia & Herzegovina",
+  bih:"Bosnia & Herzegovina",
   czechrepublic:"Czechia", czechia:"Czechia",
   drcongo:"DR Congo", congodr:"DR Congo", democraticrepublicofthecongo:"DR Congo",
   iriran:"Iran", holland:"Netherlands"
 };
 const TEAM_BY_NORM = {};
 Object.values(GROUPS).flat().forEach(t=>TEAM_BY_NORM[norm(t)]=t);
-const resolveTeam = name=>{const n=norm(name);return ALIAS[n]||TEAM_BY_NORM[n]||null;};
+const resolveTeam = input=>{
+  const names = typeof input === "string"
+    ? [input]
+    : [input?.displayName, input?.shortDisplayName, input?.abbreviation, input?.name];
+
+  for(const name of names.filter(Boolean)){
+    const n = norm(name);
+    const found = ALIAS[n] || TEAM_BY_NORM[n];
+    if(found) return found;
+  }
+
+  return null;
+};
 const etDate = iso=>new Date(iso).toLocaleDateString("en-CA",{timeZone:"America/New_York"});
 
 function applyEvent(matchId, comp){
