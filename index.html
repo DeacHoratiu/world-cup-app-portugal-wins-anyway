@@ -352,7 +352,28 @@ const fmtDay = d=>{
           mon:dt.toLocaleDateString("en-US",{month:"short"})};
 };
 const todayStr = new Date().toISOString().slice(0,10);
+  
 const esc = s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+  
+function etToLocal(dateStr, timeStr){
+  const [y,m,d] = dateStr.split("-").map(Number);
+  const [, hh, mm, ap] = timeStr.match(/(\d+):(\d+) (AM|PM)/);
+
+  let h = Number(hh);
+  const min = Number(mm);
+
+  if(ap === "PM" && h !== 12) h += 12;
+  if(ap === "AM" && h === 12) h = 0;
+
+  // World Cup 2026 is in June/July, when Eastern Time is EDT = UTC-4
+  const utcDate = new Date(Date.UTC(y, m - 1, d, h + 4, min));
+
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZoneName: "short"
+  }).format(utcDate);
+}
 
 /* ================= SCHEDULE ================= */
 function renderSchedule(){
@@ -382,7 +403,7 @@ function matchCard(m){
     <div class="teams">
       <div class="trow${hWin?" winner":""}"><span class="fl">${FLAG[m.home]||""}</span>${esc(m.home)}</div>
       <div class="trow${aWin?" winner":""}"><span class="fl">${FLAG[m.away]||""}</span>${esc(m.away)}</div>
-      <div class="meta">${m.time} ET · ${esc(m.venue)}${badge(m.id)}</div>
+      <div class="meta">${etToLocal(m.date, m.time)} · ${m.time} ET · ${esc(m.venue)}${badge(m.id)}</div>
     </div>
     <div class="score">
       <div class="sv${r[0]===""?" empty":""}" aria-label="${esc(m.home)} goals">${r[0]===""?"–":r[0]}</div>
