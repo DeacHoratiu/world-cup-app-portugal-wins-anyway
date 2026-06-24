@@ -91,6 +91,45 @@
   .match.played{border-left:5px solid var(--pitch)}
   .match.played .winner{color:var(--pitch-dk)}
   .match.played .winner::after{content:"●";color:var(--gold);font-size:9px;margin-left:6px;vertical-align:2px}
+  .match[role="button"]{cursor:pointer}
+  .match[role="button"]:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+
+  /* ---------- match details ---------- */
+  body.modal-open{overflow:hidden}
+  .match-modal{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:18px}
+  .match-modal[hidden]{display:none}
+  .modal-backdrop{position:absolute;inset:0;background:rgba(3,20,13,.72);backdrop-filter:blur(3px)}
+  .modal-card{position:relative;width:min(700px,100%);max-height:min(760px,calc(100vh - 36px));overflow:auto;
+      background:var(--chalk);border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.45)}
+  .modal-head{position:sticky;top:0;z-index:1;display:flex;justify-content:space-between;gap:16px;
+      align-items:flex-start;padding:18px 20px 14px;background:var(--pitch-dk);color:var(--chalk)}
+  .modal-kicker{font:700 10px var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--gold);margin-bottom:5px}
+  .modal-head h2{font-family:var(--display);font-size:24px;line-height:1.1;letter-spacing:.03em;text-transform:uppercase}
+  .modal-close{flex:none;width:34px;height:34px;border:1px solid rgba(245,243,234,.35);border-radius:50%;
+      background:transparent;color:var(--chalk);font-size:22px;line-height:1;cursor:pointer}
+  .modal-close:hover{background:var(--gold);border-color:var(--gold);color:var(--ink)}
+  .modal-close:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .modal-body{padding:18px 20px 22px}
+  .details-status{font:600 12px var(--mono);color:rgba(16,32,25,.62);margin-bottom:14px}
+  .goal-list{position:relative}
+  .goal-list.has-goals::before{content:"";position:absolute;left:50%;top:42px;bottom:12px;width:2px;
+      transform:translateX(-1px);background:rgba(13,79,54,.18)}
+  .timeline-teams{display:grid;grid-template-columns:1fr 54px 1fr;align-items:center;margin-bottom:12px;
+      font:700 11px/1.3 var(--mono);color:var(--pitch);text-transform:uppercase}
+  .timeline-team.home{text-align:right}.timeline-team.away{text-align:left}
+  .goal-event{position:relative;display:grid;grid-template-columns:1fr 54px 1fr;align-items:start;margin-bottom:10px}
+  .goal-content{padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;min-width:0}
+  .goal-event.home .goal-content{grid-column:1;text-align:right}
+  .goal-event.away .goal-content{grid-column:3;text-align:left}
+  .goal-minute{position:relative;z-index:1;grid-column:2;grid-row:1;justify-self:center;min-width:42px;
+      font:700 13px var(--mono);color:var(--pitch);text-align:center;padding:6px 4px;border:2px solid var(--pitch);
+      border-radius:999px;background:var(--chalk)}
+  .goal-main{font-weight:700;font-size:14px}
+  .goal-team{font:600 11px var(--mono);color:var(--pitch);margin-top:3px}
+  .goal-assist{font-size:12px;color:rgba(16,32,25,.65);margin-top:4px}
+  .event-tag{display:inline-block;font:700 9px var(--mono);letter-spacing:.08em;text-transform:uppercase;
+      background:var(--coral);color:#fff;border-radius:3px;padding:2px 5px;margin-left:6px;vertical-align:2px}
+  .details-empty{padding:24px 14px;text-align:center;font:500 12px/1.6 var(--mono);color:rgba(16,32,25,.58)}
 
   /* ---------- groups ---------- */
   .ggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px}
@@ -144,6 +183,8 @@
     .spine .num{font-size:26px}
     .trow{font-size:14px}
     nav button{padding:9px 12px;font-size:12px}
+    .match-modal{place-items:end center;padding:0}
+    .modal-card{width:100%;max-height:82vh;border-radius:14px 14px 0 0}
   }
   @media (prefers-reduced-motion:no-preference){
     .match{transition:transform .12s ease}
@@ -188,7 +229,7 @@
       </select>
       <input id="fTeam" type="search" placeholder="Search a team…" aria-label="Search a team">
     </div>
-    <p class="hint">Scores are updated every minute. Local time used.</p>
+    <p class="hint">Scores are updated every minute. Select a match for goals and scorers.</p>
     <div id="schedList"></div>
   </section>
 
@@ -204,6 +245,23 @@
     <div id="koList"></div>
   </section>
 </main>
+
+<div class="match-modal" id="matchDetails" hidden>
+  <div class="modal-backdrop" data-close-details></div>
+  <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="detailsTitle">
+    <div class="modal-head">
+      <div>
+        <div class="modal-kicker">Match details</div>
+        <h2 id="detailsTitle">Match</h2>
+      </div>
+      <button class="modal-close" id="detailsClose" type="button" aria-label="Close match details">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="details-status" id="detailsStatus">Loading…</div>
+      <div class="goal-list" id="goalList"></div>
+    </div>
+  </section>
+</div>
 
 <footer>Schedule per FIFA · Times shown in your local time, with ET as reference · Live scores via ESPN's public feed, refreshed every minute ·</footer>
 
@@ -353,6 +411,7 @@ const ROUND_NAME = {R32:"Round of 32",R16:"Round of 16",QF:"Quarterfinals",SF:"S
 const results = {}; // matchId -> [h,a]
 const liveInfo = {}; // matchId -> {label:"LIVE 63'"|"FT", live:bool}
 const koNames = {}; // knockout matchId -> [home,away] once known
+const espnIds = {}; // local matchId -> ESPN event id
 const matches = M.map((m,i)=>({id:"g"+i,date:m[0],group:m[1],home:m[2],away:m[3],time:m[4],venue:m[5]}));
 
 /* ================= HELPERS ================= */
@@ -370,7 +429,7 @@ const localDateKey = dt=>[
 const todayStr = localDateKey(new Date());
 let scheduleView = "today";
   
-const esc = s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const esc = s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
   
 function etToLocal(dateStr, timeStr){
   const [y,m,d] = dateStr.split("-").map(Number);
@@ -419,7 +478,7 @@ function matchCard(m){
   const r = results[m.id]||["",""];
   const played = r[0]!==""&&r[1]!=="";
   const hWin = played&&+r[0]>+r[1], aWin = played&&+r[1]>+r[0];
-  return `<div class="match${played?" played":""}" data-id="${m.id}">
+  return `<div class="match${played?" played":""}" data-id="${m.id}" role="button" tabindex="0" aria-label="View details for ${esc(m.home)} versus ${esc(m.away)}">
     <div class="gchip">GRP ${m.group}</div>
     <div class="teams">
       <div class="trow${hWin?" winner":""}"><span class="fl">${FLAG[m.home]||""}</span>${esc(m.home)}</div>
@@ -469,7 +528,9 @@ function renderKnockout(){
     return `<div class="round${r==="FIN"?" final":""}"><h2>${ROUND_NAME[r].replace(/(\d+)/,'<span>$1</span>')}</h2>
       <div class="games">${byRound[r].map(k=>{
         const f = fmtDay(k.date), res = results[k.id]||["",""];
-        return `<div class="match" data-id="${k.id}">
+        const names = koNames[k.id]||[];
+        const detailLabel = names.length===2 ? `${names[0]} versus ${names[1]}` : `${k.h} versus ${k.a}`;
+        return `<div class="match" data-id="${k.id}" role="button" tabindex="0" aria-label="View details for ${esc(detailLabel)}">
           <div class="gchip ko">${r==="FIN"?"🏆":r}</div>
           <div class="teams">
             <div class="trow"><span class="slot" data-ph="${esc(k.h)}">${esc((koNames[k.id]||[])[0]||"")}</span></div>
@@ -483,6 +544,130 @@ function renderKnockout(){
         </div>`;}).join("")}</div></div>`;
   }).join("");
 }
+
+/* ================= MATCH DETAILS ================= */
+const detailsModal = document.getElementById("matchDetails");
+const detailsTitle = document.getElementById("detailsTitle");
+const detailsStatus = document.getElementById("detailsStatus");
+const goalList = document.getElementById("goalList");
+let activeDetailsId = null;
+let detailsTimer = null;
+let detailsReturnFocus = null;
+
+function matchNames(id){
+  if(id.startsWith("g")){
+    const m = matches.find(match=>match.id===id);
+    return m ? [m.home,m.away] : ["Home","Away"];
+  }
+  const index = Number(id.slice(1));
+  const fixture = KO[index];
+  return koNames[id] || (fixture ? [fixture[2],fixture[3]] : ["Home","Away"]);
+}
+
+function localMatchStatus(id){
+  const score = results[id]||["",""];
+  const info = liveInfo[id];
+  if(score[0]!==""&&score[1]!=="") return `${info?.label||"Score"} · ${score[0]}–${score[1]}`;
+  return info?.label || "Goals and scorers from ESPN";
+}
+
+function renderGoalEvents(data,id){
+  const goals = (data.keyEvents||[]).filter(event=>event.scoringPlay);
+  if(!goals.length){
+    goalList.classList.remove("has-goals");
+    goalList.innerHTML = '<div class="details-empty">No goals recorded for this match yet.</div>';
+    return;
+  }
+
+  const names = matchNames(id);
+  goalList.classList.add("has-goals");
+  const events = goals.map(event=>{
+    const minute = event.clock?.displayValue || "—";
+    const scorer = event.participants?.[0]?.athlete?.displayName || event.shortText || "Goal";
+    const assist = event.participants?.[1]?.athlete?.displayName;
+    const type = event.type?.type || "goal";
+    const special = type==="own-goal" ? "Own goal" : event.shootout ? "Shootout" : "";
+    const eventTeam = resolveTeam(event.team?.displayName||"") || event.team?.displayName || "";
+    const side = eventTeam===names[1] ? "away" : "home";
+    return `<article class="goal-event ${side}">
+      <div class="goal-minute">${esc(minute)}</div>
+      <div class="goal-content">
+        <div class="goal-main">⚽ ${esc(scorer)}${special?`<span class="event-tag">${esc(special)}</span>`:""}</div>
+        ${event.team?.displayName?`<div class="goal-team">${esc(event.team.displayName)}</div>`:""}
+        ${assist?`<div class="goal-assist">Assist: ${esc(assist)}</div>`:""}
+      </div>
+    </article>`;
+  }).join("");
+  goalList.innerHTML = `<div class="timeline-teams">
+    <div class="timeline-team home">${FLAG[names[0]]||""} ${esc(names[0])}</div>
+    <div></div>
+    <div class="timeline-team away">${FLAG[names[1]]||""} ${esc(names[1])}</div>
+  </div>${events}`;
+}
+
+async function loadMatchDetails(id,quiet=false){
+  const espnId = espnIds[id];
+  if(!espnId){
+    detailsStatus.textContent = "ESPN details are not available yet. Try again after the scores finish loading.";
+    goalList.innerHTML = '<div class="details-empty">No event data available yet.</div>';
+    return;
+  }
+  if(!quiet){
+    detailsStatus.textContent = "Loading goals from ESPN…";
+    goalList.innerHTML = '<div class="details-empty">Loading match events…</div>';
+  }
+  try{
+    const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=${encodeURIComponent(espnId)}`;
+    const response = await fetch(url);
+    if(!response.ok) throw new Error("HTTP "+response.status);
+    const data = await response.json();
+    if(activeDetailsId!==id) return;
+    detailsStatus.textContent = localMatchStatus(id);
+    renderGoalEvents(data,id);
+  }catch(error){
+    if(activeDetailsId!==id) return;
+    detailsStatus.textContent = "Couldn't load the ESPN match details right now.";
+    goalList.innerHTML = '<div class="details-empty">Please close this panel and try again in a moment.</div>';
+  }
+}
+
+function openMatchDetails(id,trigger){
+  activeDetailsId = id;
+  detailsReturnFocus = trigger;
+  const names = matchNames(id);
+  detailsTitle.textContent = `${names[0]} – ${names[1]}`;
+  detailsModal.hidden = false;
+  document.body.classList.add("modal-open");
+  document.getElementById("detailsClose").focus();
+  loadMatchDetails(id);
+  clearInterval(detailsTimer);
+  if(liveInfo[id]?.live) detailsTimer = setInterval(()=>loadMatchDetails(id,true),60000);
+}
+
+function closeMatchDetails(){
+  detailsModal.hidden = true;
+  document.body.classList.remove("modal-open");
+  activeDetailsId = null;
+  clearInterval(detailsTimer);
+  detailsTimer = null;
+  if(detailsReturnFocus?.isConnected) detailsReturnFocus.focus();
+}
+
+document.addEventListener("click",event=>{
+  const card = event.target.closest(".match[role='button']");
+  if(card) openMatchDetails(card.dataset.id,card);
+});
+document.addEventListener("keydown",event=>{
+  const card = event.target.closest?.(".match[role='button']");
+  if(card&&(event.key==="Enter"||event.key===" ")){
+    event.preventDefault();
+    openMatchDetails(card.dataset.id,card);
+  }else if(event.key==="Escape"&&!detailsModal.hidden){
+    closeMatchDetails();
+  }
+});
+document.getElementById("detailsClose").addEventListener("click",closeMatchDetails);
+detailsModal.querySelector("[data-close-details]").addEventListener("click",closeMatchDetails);
 
 /* ================= WIRING ================= */
 function countPlayed(){
@@ -584,6 +769,7 @@ async function syncScores(manual){
       const gm = h&&a&&matches.find(m=>m.date===d&&
         ((m.home===h&&m.away===a)||(m.home===a&&m.away===h)));
       if(gm){
+        espnIds[gm.id] = String(ev.id);
         // respect fixture orientation if API flips home/away
         const flip = gm.home!==h;
         if(applyEvent(gm.id,comp)&&flip) results[gm.id].reverse();
@@ -597,6 +783,7 @@ async function syncScores(manual){
       const evs = koEventsByDate[d].sort((x,y)=>new Date(x.date)-new Date(y.date));
       evs.forEach((ev,i)=>{
         const id = (koByDate[d]||[])[i]; if(!id) return;
+        espnIds[id] = String(ev.id);
         const comp = ev.competitions[0];
         const hN = comp.competitors?.find(c=>c.homeAway==="home")?.team?.displayName;
         const aN = comp.competitors?.find(c=>c.homeAway==="away")?.team?.displayName;
