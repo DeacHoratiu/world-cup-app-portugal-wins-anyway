@@ -49,6 +49,12 @@
 
   /* ---------- filters ---------- */
   .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px}
+  .schedule-view{display:flex;gap:6px;flex-basis:100%}
+  .schedule-view button{font:600 13px var(--body);padding:9px 14px;border:1px solid rgba(245,243,234,.35);
+      border-radius:8px;background:transparent;color:var(--chalk);cursor:pointer}
+  .schedule-view button:hover{border-color:var(--gold)}
+  .schedule-view button.on{background:var(--gold);border-color:var(--gold);color:var(--ink)}
+  .schedule-view button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
   .filters select,.filters input{font:500 14px var(--body);padding:9px 12px;border-radius:8px;
       border:1px solid transparent;background:var(--chalk);color:var(--ink);min-width:160px}
   .filters input{flex:1}
@@ -173,6 +179,10 @@
   <!-- ============ SCHEDULE ============ -->
   <section id="schedule" class="panel on">
     <div class="filters">
+      <div class="schedule-view" role="group" aria-label="Alege meciurile afișate">
+        <button class="on" type="button" data-schedule-view="today" aria-pressed="true">Astăzi</button>
+        <button type="button" data-schedule-view="all" aria-pressed="false">Toate meciurile</button>
+      </div>
       <select id="fGroup" aria-label="Filter by group">
         <option value="">All groups</option>
       </select>
@@ -352,7 +362,13 @@ const fmtDay = d=>{
           num:dt.getDate(),
           mon:dt.toLocaleDateString("en-US",{month:"short"})};
 };
-const todayStr = new Date().toISOString().slice(0,10);
+const localDateKey = dt=>[
+  dt.getFullYear(),
+  String(dt.getMonth()+1).padStart(2,"0"),
+  String(dt.getDate()).padStart(2,"0")
+].join("-");
+const todayStr = localDateKey(new Date());
+let scheduleView = "today";
   
 const esc = s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
   
@@ -382,7 +398,9 @@ function renderSchedule(){
   const q = document.getElementById("fTeam").value.trim().toLowerCase();
   const list = document.getElementById("schedList");
   const byDate = {};
-  matches.filter(m=>(!g||m.group===g)&&(!q||m.home.toLowerCase().includes(q)||m.away.toLowerCase().includes(q)))
+  matches.filter(m=>(scheduleView==="all"||m.date===todayStr)&&
+                    (!g||m.group===g)&&
+                    (!q||m.home.toLowerCase().includes(q)||m.away.toLowerCase().includes(q)))
          .forEach(m=>(byDate[m.date]=byDate[m.date]||[]).push(m));
   list.innerHTML = Object.keys(byDate).sort().map(d=>{
     const f = fmtDay(d), isToday = d===todayStr;
@@ -393,7 +411,9 @@ function renderSchedule(){
       </div>
       <div class="games">${byDate[d].map(matchCard).join("")}</div>
     </div>`;
-  }).join("") || '<p class="hint">No matches found for that filter.</p>';
+  }).join("") || `<p class="hint">${scheduleView==="today"
+    ? "Nu sunt meciuri programate astăzi pentru filtrele selectate."
+    : "Nu am găsit meciuri pentru filtrele selectate."}</p>`;
 }
 function matchCard(m){
   const r = results[m.id]||["",""];
@@ -477,6 +497,15 @@ const sel=document.getElementById("fGroup");
 Object.keys(GROUPS).forEach(g=>{const o=document.createElement("option");o.value=g;o.textContent="Group "+g;sel.appendChild(o);});
 sel.addEventListener("change",renderSchedule);
 document.getElementById("fTeam").addEventListener("input",renderSchedule);
+document.querySelectorAll("[data-schedule-view]").forEach(button=>button.addEventListener("click",()=>{
+  scheduleView = button.dataset.scheduleView;
+  document.querySelectorAll("[data-schedule-view]").forEach(item=>{
+    const active = item===button;
+    item.classList.toggle("on",active);
+    item.setAttribute("aria-pressed",String(active));
+  });
+  renderSchedule();
+}));
 
 /* ================= LIVE SCORES (ESPN public API) ================= */
 const API = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?limit=400&dates=20260611-20260719";
