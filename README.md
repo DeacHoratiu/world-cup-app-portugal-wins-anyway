@@ -157,7 +157,8 @@ your_ntfy_topic_name
 
 * `notifier/state.json` is important. It prevents duplicate alerts.
 * If `state.json` already has `"initialized": true`, the setup confirmation notification will not be sent again unless `TEST_NOTIFY=1` is used.
-* The notifier performs one check and exits. Task Scheduler is responsible for running it every 5 minutes.
+* Task Scheduler starts the notifier every 5 minutes. It performs one check and exits during quiet periods; near a match it stays active for about 4 minutes and checks ESPN every minute.
+* Kickoff alerts are timed from ESPN's official event time. Live-state and full-time alerts still use ESPN's current match status.
 * If the VM is turned off, notifications will not run.
 * If you change the ntfy topic, update it in `run-notifier.ps1`.
 * GitHub Pages can stay enabled even if GitHub Actions is disabled.

@@ -1,16 +1,10 @@
 /**
- * World Cup 2026 — ntfy notifier
- * Runs on a GitHub Actions cron schedule. Checks ESPN's public scoreboard
- * and sends phone notifications via ntfy.sh:
- *   ⚽ 15 minutes before kickoff
- *   ⚽ when a match starts
- *   🏁 final result with the score
+ * World Cup 2026 — adaptive ntfy notifier for a Windows Task Scheduler job.
  *
- * The ntfy topic is read from the NTFY_TOPIC environment variable
- * (a GitHub Secret) so it never appears in the repository.
- *
- * State (which alerts were already sent) is kept in notifier/state.json,
- * committed back by the workflow after each run.
+ * Task Scheduler starts this script every five minutes. During quiet periods it
+ * makes one ESPN request and exits. Near a match it stays alive for four minutes
+ * and polls every minute. Kickoff alerts use the official event time so they are
+ * not delayed until ESPN changes the match state to "in".
  */
 
 const fs = require("fs");
@@ -18,24 +12,57 @@ const path = require("path");
 
 const TOPIC = process.env.NTFY_TOPIC;
 if (!TOPIC) {
-  console.error("Missing NTFY_TOPIC environment variable (GitHub Secret).");
+  console.error("Missing NTFY_TOPIC environment variable.");
   process.exit(1);
 }
-const NTFY = `https://ntfy.sh/${TOPIC}`;
-const API =
-  "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?limit=400&dates=20260611-20260719";
 
+const NTFY = `https://ntfy.sh/${TOPIC}`;
+const API_BASE =
+  "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?limit=100";
 const STATE_FILE = path.join(__dirname, "state.json");
-const REMIND_MS = 15 * 60 * 1000; // kickoff reminder window
+
+const MINUTE = 60 * 1000;
+const REMIND_MS = 15 * MINUTE;
+const NEAR_BEFORE_MS = 20 * MINUTE;
+const NEAR_AFTER_MS = 4 * 60 * MINUTE;
+const KICKOFF_LOOKAHEAD_MS = 6 * MINUTE;
+const ACTIVE_RUN_MS = 4 * MINUTE;
+const POLL_MS = MINUTE;
+
+function normalizeState(state) {
+  state.phase ||= {};
+  state.reminded ||= {};
+  state.kickoff ||= {};
+  return state;
+}
 
 function loadState() {
   try {
-    return JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    return normalizeState(JSON.parse(fs.readFileSync(STATE_FILE, "utf8")));
   } catch {
-    // First ever run: record current phases without notifying,
-    // so games already finished don't trigger a flood of alerts.
-    return { initialized: false, phase: {}, reminded: {} };
+    return { initialized: false, phase: {}, reminded: {}, kickoff: {} };
   }
+}
+
+function saveState(state) {
+  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+}
+
+function etDateKey(date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}${value.month}${value.day}`;
+}
+
+function apiUrl() {
+  const now = Date.now();
+  const day = 24 * 60 * MINUTE;
+  return `${API_BASE}&dates=${etDateKey(new Date(now - day))}-${etDateKey(new Date(now + day))}`;
 }
 
 async function notify(title, message) {
@@ -46,93 +73,164 @@ async function notify(title, message) {
 }
 
 function teams(comp) {
-  const h = comp.competitors?.find((c) => c.homeAway === "home") || comp.competitors?.[0];
-  const a = comp.competitors?.find((c) => c.homeAway === "away") || comp.competitors?.[1];
+  const h = comp.competitors?.find((team) => team.homeAway === "home") || comp.competitors?.[0];
+  const a = comp.competitors?.find((team) => team.homeAway === "away") || comp.competitors?.[1];
   return { h, a };
 }
 
+async function sendKickoff(state, game, message) {
+  if (state.kickoff[game.id]) return;
+
+  // Reserve and save before sending so overlapping checks cannot duplicate it.
+  state.kickoff[game.id] = true;
+  saveState(state);
+  await notify("⚽ Kickoff", message);
+}
+
 async function checkOnce(state, firstRun) {
-  const res = await fetch(API);
+  const res = await fetch(apiUrl());
   if (!res.ok) {
     console.error(`ESPN API responded ${res.status} — skipping this check.`);
-    return;
+    return [];
   }
+
   const data = await res.json();
   const events = data.events || [];
+  const games = [];
   const now = Date.now();
 
   for (const ev of events) {
     const comp = ev.competitions?.[0];
     if (!comp) continue;
+
     const id = String(ev.id);
-    const st = comp.status?.type?.state || "pre"; // pre | in | post
-    const prev = state.phase[id] || "pre";
+    const currentPhase = comp.status?.type?.state || "pre";
+    const previousPhase = state.phase[id] || "pre";
     const { h, a } = teams(comp);
     if (!h || !a) continue;
+
     const hName = h.team?.displayName || "?";
     const aName = a.team?.displayName || "?";
     const round = ev.season?.slug || comp.notes?.[0]?.headline || "";
-
-    // 1) kickoff reminder: 15 minutes before, only while still "pre"
     const kick = new Date(ev.date).getTime();
-    if (!firstRun && st === "pre" && !state.reminded[id] && now >= kick - REMIND_MS && now < kick) {
+    const game = { id, kick, hName, aName, round, state: currentPhase };
+    games.push(game);
+
+    if (
+      !firstRun &&
+      currentPhase === "pre" &&
+      !state.reminded[id] &&
+      now >= kick - REMIND_MS &&
+      now < kick
+    ) {
       state.reminded[id] = true;
-      const inMin = Math.max(1, Math.round((kick - now) / 60000));
-      await notify("⚽ Starting soon", `${hName} – ${aName} kicks off in ~${inMin} min${round ? " · " + round : ""}`);
+      const inMinutes = Math.max(1, Math.round((kick - now) / MINUTE));
+      await notify(
+        "⚽ Starting soon",
+        `${hName} – ${aName} kicks off in ~${inMinutes} min${round ? " · " + round : ""}`
+      );
     }
 
-    // 2) match started
-    if (!firstRun && st === "in" && prev === "pre") {
-      await notify("⚽ Kickoff", `${hName} – ${aName} is underway`);
+    // Fallback: if a scheduled timer was missed, ESPN's live state still sends
+    // the alert. Normally the exact-time timer has already reserved this ID.
+    if (
+      !firstRun &&
+      currentPhase === "in" &&
+      previousPhase === "pre" &&
+      !state.kickoff[id]
+    ) {
+      await sendKickoff(state, game, `${hName} – ${aName} is underway`);
     }
 
-    // 3) final result
-    if (!firstRun && st === "post" && prev !== "post") {
+    if (!firstRun && currentPhase === "post" && previousPhase !== "post") {
       let score = `${hName} ${h.score} – ${a.score} ${aName}`;
-      // include penalty shootout if present (knockout rounds)
       if (h.shootoutScore != null && a.shootoutScore != null) {
         score += ` (${h.shootoutScore}–${a.shootoutScore} on penalties)`;
       }
       await notify("🏁 Full time", score);
     }
 
-    state.phase[id] = st;
+    state.phase[id] = currentPhase;
   }
 
   state.initialized = true;
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
-  console.log(`${new Date().toISOString()} · checked ${events.length} events`);
+  saveState(state);
+  console.log(`${new Date().toISOString()} · checked ${events.length} nearby events`);
+  return games;
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function isNearMatch(games) {
+  const now = Date.now();
+  return games.some(
+    (game) =>
+      game.state === "in" ||
+      (game.state !== "post" &&
+        now >= game.kick - NEAR_BEFORE_MS &&
+        now <= game.kick + NEAR_AFTER_MS)
+  );
+}
+
+function scheduleKickoffs(state, games, firstRun) {
+  if (firstRun) return [];
+  const now = Date.now();
+
+  return games
+    .filter(
+      (game) =>
+        game.state === "pre" &&
+        !state.kickoff[game.id] &&
+        game.kick >= now &&
+        game.kick - now <= KICKOFF_LOOKAHEAD_MS
+    )
+    .map(async (game) => {
+      const waitMs = Math.max(0, game.kick - Date.now());
+      console.log(
+        `scheduled kickoff alert for ${game.hName} - ${game.aName} in ${Math.ceil(waitMs / 1000)}s`
+      );
+      await sleep(waitMs);
+      await sendKickoff(
+        state,
+        game,
+        `${game.hName} – ${game.aName} is scheduled to kick off now${
+          game.round ? " · " + game.round : ""
+        }`
+      );
+    });
+}
+
+async function pollNearby(state, initialGames) {
+  if (!isNearMatch(initialGames)) return;
+
+  const endAt = Date.now() + ACTIVE_RUN_MS;
+  while (Date.now() < endAt) {
+    await sleep(Math.min(POLL_MS, Math.max(0, endAt - Date.now())));
+    await checkOnce(state, false);
+  }
+}
 
 (async () => {
   const state = loadState();
   const firstRun = !state.initialized;
+  const games = await checkOnce(state, firstRun);
+  const kickoffTimers = scheduleKickoffs(state, games, firstRun);
 
-  // GitHub's cron is best-effort and often very late, so instead of relying on
-  // it for frequency, each job stays alive for LOOP_MINUTES and polls every
-  // 60 seconds. The cron only has to start the next shift before this one ends.
-  const loopMinutes = Number(process.env.LOOP_MINUTES || 0);
-  const endAt = Date.now() + loopMinutes * 60 * 1000;
-
-  await checkOnce(state, firstRun); // firstRun only suppresses the very first check
-  while (Date.now() < endAt) {
-    await sleep(60 * 1000);
-    await checkOnce(state, false);
-  }
+  // The timer and the short live polling shift run together. Outside match
+  // windows both arrays are empty and the process exits immediately.
+  await Promise.all([pollNearby(state, games), ...kickoffTimers]);
 
   if (firstRun) {
-    // One-time confirmation so you know the whole chain works
-    // (GitHub Secret → script → ntfy → phone) before the real alerts start.
     await notify(
       "World Cup 2026 ✅",
       "Notifications are set up correctly! You'll get alerts ~15 min before each match, at kickoff, and at full time with the score."
     );
   }
 
-  console.log(`Shift complete · polled for ${loopMinutes} minute(s)`);
-})().catch((e) => {
-  console.error(e);
-  process.exit(0); // never hard-fail the cron on transient errors
+  console.log(
+    `Shift complete · ${isNearMatch(games) ? "adaptive polling was active" : "quiet period"}`
+  );
+})().catch((error) => {
+  console.error(error);
+  process.exit(0); // do not hard-fail Task Scheduler on transient network errors
 });
