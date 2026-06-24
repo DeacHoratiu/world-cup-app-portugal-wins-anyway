@@ -426,12 +426,11 @@ const localDateKey = dt=>[
   String(dt.getMonth()+1).padStart(2,"0"),
   String(dt.getDate()).padStart(2,"0")
 ].join("-");
-const todayStr = localDateKey(new Date());
 let scheduleView = "today";
   
 const esc = s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
   
-function etToLocal(dateStr, timeStr){
+function etKickoffDate(dateStr, timeStr){
   const [y,m,d] = dateStr.split("-").map(Number);
   const [, hh, mm, ap] = timeStr.match(/(\d+):(\d+) (AM|PM)/);
 
@@ -442,7 +441,13 @@ function etToLocal(dateStr, timeStr){
   if(ap === "AM" && h === 12) h = 0;
 
   // World Cup 2026 is in June/July, when Eastern Time is EDT = UTC-4
-  const utcDate = new Date(Date.UTC(y, m - 1, d, h + 4, min));
+  return new Date(Date.UTC(y, m - 1, d, h + 4, min));
+}
+
+const matchLocalDate = match=>localDateKey(etKickoffDate(match.date,match.time));
+
+function etToLocal(dateStr, timeStr){
+  const utcDate = etKickoffDate(dateStr,timeStr);
 
   return new Intl.DateTimeFormat(undefined, {
     hour: "2-digit",
@@ -457,10 +462,14 @@ function renderSchedule(){
   const q = document.getElementById("fTeam").value.trim().toLowerCase();
   const list = document.getElementById("schedList");
   const byDate = {};
-  matches.filter(m=>(scheduleView==="all"||m.date===todayStr)&&
+  const todayStr = localDateKey(new Date());
+  matches.filter(m=>(scheduleView==="all"||matchLocalDate(m)===todayStr)&&
                     (!g||m.group===g)&&
                     (!q||m.home.toLowerCase().includes(q)||m.away.toLowerCase().includes(q)))
-         .forEach(m=>(byDate[m.date]=byDate[m.date]||[]).push(m));
+         .forEach(m=>{
+           const localDate = matchLocalDate(m);
+           (byDate[localDate]=byDate[localDate]||[]).push(m);
+         });
   list.innerHTML = Object.keys(byDate).sort().map(d=>{
     const f = fmtDay(d), isToday = d===todayStr;
     return `<div class="day">
@@ -527,7 +536,7 @@ function renderKnockout(){
     if(!byRound[r]) return "";
     return `<div class="round${r==="FIN"?" final":""}"><h2>${ROUND_NAME[r].replace(/(\d+)/,'<span>$1</span>')}</h2>
       <div class="games">${byRound[r].map(k=>{
-        const f = fmtDay(k.date), res = results[k.id]||["",""];
+        const f = fmtDay(localDateKey(etKickoffDate(k.date,k.time))), res = results[k.id]||["",""];
         const names = koNames[k.id]||[];
         const detailLabel = names.length===2 ? `${names[0]} versus ${names[1]}` : `${k.h} versus ${k.a}`;
         return `<div class="match" data-id="${k.id}" role="button" tabindex="0" aria-label="View details for ${esc(detailLabel)}">
