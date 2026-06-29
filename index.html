@@ -110,7 +110,9 @@
   .modal-close:hover{background:var(--gold);border-color:var(--gold);color:var(--ink)}
   .modal-close:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
   .modal-body{padding:18px 20px 22px}
-  .details-status{font:600 12px var(--mono);color:rgba(16,32,25,.62);margin-bottom:14px}
+  .details-status{font:600 12px var(--mono);color:rgba(16,32,25,.62);margin-bottom:6px}
+  .details-meta{font:600 11px/1.5 var(--mono);color:rgba(16,32,25,.72);margin-bottom:16px;
+      padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
   .goal-list{position:relative}
   .goal-list.has-goals::before{content:"";position:absolute;left:50%;top:42px;bottom:12px;width:2px;
       transform:translateX(-1px);background:rgba(13,79,54,.18)}
@@ -127,6 +129,13 @@
   .goal-main{font-weight:700;font-size:14px}
   .goal-team{font:600 11px var(--mono);color:var(--pitch);margin-top:3px}
   .goal-assist{font-size:12px;color:rgba(16,32,25,.65);margin-top:4px}
+  .half-label{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;
+      margin:16px 0 10px;font:800 10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--pitch)}
+  .half-label::before,.half-label::after{content:"";height:1px;background:var(--line)}
+  .half-divider{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;margin:18px 0;
+      font:800 11px var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--coral)}
+  .half-divider::before,.half-divider::after{content:"";height:2px;background:rgba(224,90,64,.25)}
+  .half-empty{padding:8px 0 4px;text-align:center;font:600 11px var(--mono);color:rgba(16,32,25,.45)}
   .event-tag{display:inline-block;font:700 9px var(--mono);letter-spacing:.08em;text-transform:uppercase;
       background:var(--coral);color:#fff;border-radius:3px;padding:2px 5px;margin-left:6px;vertical-align:2px}
   .details-empty{padding:24px 14px;text-align:center;font:500 12px/1.6 var(--mono);color:rgba(16,32,25,.58)}
@@ -149,12 +158,30 @@
   tr.q td.pts{color:var(--pitch-dk)}
   .legend{font:500 11px var(--mono);color:var(--chalk);opacity:.75;margin:14px 2px 0}
 
-  /* ---------- knockout ---------- */
-  .round{margin-bottom:30px}
+  /* ---------- road to the trophy ---------- */
+  .round{margin-bottom:34px}
   .round h2{font-family:var(--display);font-size:22px;letter-spacing:.05em;text-transform:uppercase;
       color:var(--chalk);margin-bottom:12px}
   .round h2 span{color:var(--gold)}
-  .round .games{gap:8px}
+  .bracket-board{display:grid;grid-template-columns:repeat(5,minmax(188px,1fr));gap:12px;
+      align-items:start;overflow-x:auto;padding:6px 2px 18px;scroll-snap-type:x proximity}
+  .bracket-column{scroll-snap-align:start;position:relative}
+  .bracket-column h2{padding:8px 0 12px}
+  .bracket-stack{display:flex;flex-direction:column;gap:12px;padding-top:2px}
+  .bracket-match{position:relative;grid-template-columns:44px 1fr 38px;gap:8px;padding:10px}
+  .bracket-match .gchip{font-size:11px;padding:6px 0}
+  .bracket-match .trow{font-size:13px;gap:6px}
+  .bracket-match .slot{display:block;min-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bracket-match .meta{font-size:10px;line-height:1.35}
+  .bracket-match .score .sv{width:36px;font-size:14px;padding:3px 0}
+  .bracket-column:not(.trophy-column) .bracket-match::after{
+      content:"";position:absolute;right:-12px;top:50%;width:12px;height:2px;background:rgba(230,177,60,.42)}
+  .bracket-column:not(.trophy-column)::after{
+      content:"";position:absolute;right:-12px;top:70px;bottom:22px;width:2px;background:linear-gradient(rgba(230,177,60,.08),rgba(230,177,60,.32),rgba(230,177,60,.08))}
+  .bracket-column[data-round="R16"] .bracket-stack{padding-top:28px;gap:34px}
+  .bracket-column[data-round="QF"] .bracket-stack{padding-top:82px;gap:86px}
+  .bracket-column[data-round="SF"] .bracket-stack{padding-top:178px;gap:190px}
+  .bracket-column[data-round="FIN"] .bracket-stack{padding-top:272px}
   .slot{font-weight:600;font-size:14px;border-bottom:1px dashed var(--line);min-width:120px;
       padding:1px 2px;color:rgba(16,32,25,.85)}
   .slot:empty::before{content:attr(data-ph);color:rgba(16,32,25,.4);font-weight:500}
@@ -208,7 +235,7 @@
 <nav>
   <button class="on" data-tab="schedule">Schedule</button>
   <button data-tab="groups">Groups</button>
-  <button data-tab="knockout">Knockout</button>
+  <button data-tab="knockout">Road to the Trophy</button>
 </nav>
 
 <div class="syncbar">
@@ -224,12 +251,12 @@
         <button class="on" type="button" data-schedule-view="today" aria-pressed="true">Today</button>
         <button type="button" data-schedule-view="all" aria-pressed="false">All fixtures</button>
       </div>
-      <select id="fGroup" aria-label="Filter by group">
-        <option value="">All groups</option>
+      <select id="fGroup" aria-label="Filter by stage or group">
+        <option value="">All stages</option>
       </select>
       <input id="fTeam" type="search" placeholder="Search a team…" aria-label="Search a team">
     </div>
-    <p class="hint">Scores are updated every minute. Select a match for goals and scorers.</p>
+    <p class="hint">Scores are updated every minute. Schedule now includes group and knockout matches. Select a match for goals and scorers.</p>
     <div id="schedList"></div>
   </section>
 
@@ -239,9 +266,9 @@
     <p class="legend">Shaded rows = top two (automatic qualification). The 8 best third-placed teams also reach the Round of 32.</p>
   </section>
 
-  <!-- ============ KNOCKOUT ============ -->
+  <!-- ============ ROAD TO THE TROPHY ============ -->
   <section id="knockout" class="panel">
-    <p class="hint">Bracket teams and scores fill in automatically as the tournament progresses.</p>
+    <p class="hint">Bracket teams and scores fill in automatically as the tournament progresses. Times shown here are local.</p>
     <div id="koList"></div>
   </section>
 </main>
@@ -258,6 +285,7 @@
     </div>
     <div class="modal-body">
       <div class="details-status" id="detailsStatus">Loading…</div>
+      <div class="details-meta" id="detailsMeta"></div>
       <div class="goal-list" id="goalList"></div>
     </div>
   </section>
@@ -413,6 +441,17 @@ const liveInfo = {}; // matchId -> {label:"LIVE 63'"|"FT", live:bool}
 const koNames = {}; // knockout matchId -> [home,away] once known
 const espnIds = {}; // local matchId -> ESPN event id
 const matches = M.map((m,i)=>({id:"g"+i,date:m[0],group:m[1],home:m[2],away:m[3],time:m[4],venue:m[5]}));
+const knockoutMatches = KO.map((k,i)=>({
+  id:"k"+i,
+  date:k[0],
+  group:"KO",
+  round:k[1],
+  home:k[2],
+  away:k[3],
+  time:k[4],
+  venue:k[5],
+  knockout:true
+}));
 
 /* ================= HELPERS ================= */
 const fmtDay = d=>{
@@ -446,6 +485,21 @@ function etKickoffDate(dateStr, timeStr){
 
 const matchLocalDate = match=>localDateKey(etKickoffDate(match.date,match.time));
 
+const matchKickoff = match=>etKickoffDate(match.date,match.time);
+
+function scheduleTeams(match){
+  if(match.knockout){
+    const names = koNames[match.id];
+    return names?.length===2 ? names : [match.home,match.away];
+  }
+  return [match.home,match.away];
+}
+
+function scheduleSort(a,b){
+  const rank = match=>liveInfo[match.id]?.live ? 0 : results[match.id] ? 2 : 1;
+  return rank(a)-rank(b) || matchKickoff(a)-matchKickoff(b);
+}
+
 function etToLocal(dateStr, timeStr){
   const utcDate = etKickoffDate(dateStr,timeStr);
 
@@ -463,15 +517,20 @@ function renderSchedule(){
   const list = document.getElementById("schedList");
   const byDate = {};
   const todayStr = localDateKey(new Date());
-  matches.filter(m=>(scheduleView==="all"||matchLocalDate(m)===todayStr)&&
+  [...matches,...knockoutMatches].filter(m=>{
+                    const names = scheduleTeams(m);
+                    const haystack = [m.home,m.away,...names].join(" ").toLowerCase();
+                    return (scheduleView==="all"||matchLocalDate(m)===todayStr)&&
                     (!g||m.group===g)&&
-                    (!q||m.home.toLowerCase().includes(q)||m.away.toLowerCase().includes(q)))
+                    (!q||haystack.includes(q));
+                  })
          .forEach(m=>{
            const localDate = matchLocalDate(m);
            (byDate[localDate]=byDate[localDate]||[]).push(m);
          });
   list.innerHTML = Object.keys(byDate).sort().map(d=>{
     const f = fmtDay(d), isToday = d===todayStr;
+    byDate[d].sort(scheduleSort);
     return `<div class="day">
       <div class="spine${isToday?" today":""}">
         <div class="dow">${f.dow}</div><div class="num">${f.num}</div><div class="mon">${f.mon}</div>
@@ -480,23 +539,26 @@ function renderSchedule(){
       <div class="games">${byDate[d].map(matchCard).join("")}</div>
     </div>`;
   }).join("") || `<p class="hint">${scheduleView==="today"
-    ? "Nu sunt meciuri programate astăzi pentru filtrele selectate."
-    : "Nu am găsit meciuri pentru filtrele selectate."}</p>`;
+    ? "No matches scheduled today for the selected filters."
+    : "No fixtures found for the selected filters."}</p>`;
 }
 function matchCard(m){
   const r = results[m.id]||["",""];
   const played = r[0]!==""&&r[1]!=="";
   const hWin = played&&+r[0]>+r[1], aWin = played&&+r[1]>+r[0];
-  return `<div class="match${played?" played":""}" data-id="${m.id}" role="button" tabindex="0" aria-label="View details for ${esc(m.home)} versus ${esc(m.away)}">
-    <div class="gchip">GRP ${m.group}</div>
+  const [home,away] = scheduleTeams(m);
+  const chip = m.knockout ? (m.round==="FIN"?"🏆":m.round) : `GRP ${m.group}`;
+  const chipClass = m.knockout ? "gchip ko" : "gchip";
+  return `<div class="match${played?" played":""}" data-id="${m.id}" role="button" tabindex="0" aria-label="View details for ${esc(home)} versus ${esc(away)}">
+    <div class="${chipClass}">${chip}</div>
     <div class="teams">
-      <div class="trow${hWin?" winner":""}"><span class="fl">${FLAG[m.home]||""}</span>${esc(m.home)}</div>
-      <div class="trow${aWin?" winner":""}"><span class="fl">${FLAG[m.away]||""}</span>${esc(m.away)}</div>
+      <div class="trow${hWin?" winner":""}"><span class="fl">${FLAG[home]||""}</span>${esc(home)}</div>
+      <div class="trow${aWin?" winner":""}"><span class="fl">${FLAG[away]||""}</span>${esc(away)}</div>
       <div class="meta">${etToLocal(m.date, m.time)} · ${m.time} ET · ${esc(m.venue)}${badge(m.id)}</div>
     </div>
     <div class="score">
-      <div class="sv${r[0]===""?" empty":""}" aria-label="${esc(m.home)} goals">${r[0]===""?"–":r[0]}</div>
-      <div class="sv${r[1]===""?" empty":""}" aria-label="${esc(m.away)} goals">${r[1]===""?"–":r[1]}</div>
+      <div class="sv${r[0]===""?" empty":""}" aria-label="${esc(home)} goals">${r[0]===""?"–":r[0]}</div>
+      <div class="sv${r[1]===""?" empty":""}" aria-label="${esc(away)} goals">${r[1]===""?"–":r[1]}</div>
     </div>
   </div>`;
 }
@@ -532,36 +594,62 @@ function renderGroups(){
 function renderKnockout(){
   const byRound = {};
   KO.forEach((k,i)=>(byRound[k[1]]=byRound[k[1]]||[]).push({...{date:k[0],round:k[1],h:k[2],a:k[3],time:k[4],venue:k[5]},id:"k"+i}));
-  document.getElementById("koList").innerHTML = Object.keys(ROUND_NAME).map(r=>{
+  const roadRounds = ["R32","R16","QF","SF","FIN"];
+  const compactKoLabel = label=>String(label)
+    .replace(/Round of 32/gi,"R32")
+    .replace(/Round of 16/gi,"R16")
+    .replace(/Quarterfinal/gi,"QF")
+    .replace(/Semifinal/gi,"SF")
+    .replace(/\bWinner\b/gi,"W")
+    .replace(/\bLoser\b/gi,"L");
+  const card = (k,r)=>{
+    const localDate = localDateKey(etKickoffDate(k.date,k.time));
+    const f = fmtDay(localDate), res = results[k.id]||["",""];
+    const names = koNames[k.id]||[];
+    const detailLabel = names.length===2 ? `${names[0]} versus ${names[1]}` : `${k.h} versus ${k.a}`;
+    const home = compactKoLabel(names[0]||"");
+    const away = compactKoLabel(names[1]||"");
+    const homePh = compactKoLabel(k.h);
+    const awayPh = compactKoLabel(k.a);
+    return `<div class="match bracket-match" data-id="${k.id}" role="button" tabindex="0" aria-label="View details for ${esc(detailLabel)}">
+      <div class="gchip ko">${r==="FIN"?"🏆":r}</div>
+      <div class="teams">
+        <div class="trow"><span class="slot" data-ph="${esc(homePh)}">${esc(home)}</span></div>
+        <div class="trow"><span class="slot" data-ph="${esc(awayPh)}">${esc(away)}</span></div>
+        <div class="meta">${f.dow} ${f.mon} ${f.num} · ${etToLocal(k.date,k.time)}${badge(k.id)}</div>
+      </div>
+      <div class="score">
+        <div class="sv${res[0]===""?" empty":""}">${res[0]===""?"–":res[0]}</div>
+        <div class="sv${res[1]===""?" empty":""}">${res[1]===""?"–":res[1]}</div>
+      </div>
+    </div>`;
+  };
+  const rounds = roadRounds.map(r=>{
     if(!byRound[r]) return "";
-    return `<div class="round${r==="FIN"?" final":""}"><h2>${ROUND_NAME[r].replace(/(\d+)/,'<span>$1</span>')}</h2>
-      <div class="games">${byRound[r].map(k=>{
-        const f = fmtDay(localDateKey(etKickoffDate(k.date,k.time))), res = results[k.id]||["",""];
-        const names = koNames[k.id]||[];
-        const detailLabel = names.length===2 ? `${names[0]} versus ${names[1]}` : `${k.h} versus ${k.a}`;
-        return `<div class="match" data-id="${k.id}" role="button" tabindex="0" aria-label="View details for ${esc(detailLabel)}">
-          <div class="gchip ko">${r==="FIN"?"🏆":r}</div>
-          <div class="teams">
-            <div class="trow"><span class="slot" data-ph="${esc(k.h)}">${esc((koNames[k.id]||[])[0]||"")}</span></div>
-            <div class="trow"><span class="slot" data-ph="${esc(k.a)}">${esc((koNames[k.id]||[])[1]||"")}</span></div>
-            <div class="meta">${f.dow} ${f.mon} ${f.num} · ${k.time} ET · ${esc(k.venue)}${badge(k.id)}</div>
-          </div>
-          <div class="score">
-            <div class="sv${res[0]===""?" empty":""}">${res[0]===""?"–":res[0]}</div>
-            <div class="sv${res[1]===""?" empty":""}">${res[1]===""?"–":res[1]}</div>
-          </div>
-        </div>`;}).join("")}</div></div>`;
+    const games = byRound[r].sort((a,b)=>etKickoffDate(a.date,a.time)-etKickoffDate(b.date,b.time));
+    return `<section class="bracket-column round${r==="FIN"?" final":""}" data-round="${r}">
+      <h2>${ROUND_NAME[r].replace(/(\d+)/,'<span>$1</span>')}</h2>
+      <div class="bracket-stack">${games.map(k=>card(k,r)).join("")}</div>
+    </section>`;
   }).join("");
+  document.getElementById("koList").innerHTML = `<div class="bracket-board">${rounds}</div>`;
 }
 
 /* ================= MATCH DETAILS ================= */
 const detailsModal = document.getElementById("matchDetails");
 const detailsTitle = document.getElementById("detailsTitle");
 const detailsStatus = document.getElementById("detailsStatus");
+const detailsMeta = document.getElementById("detailsMeta");
 const goalList = document.getElementById("goalList");
 let activeDetailsId = null;
 let detailsTimer = null;
 let detailsReturnFocus = null;
+
+function matchFixture(id){
+  if(id.startsWith("g")) return matches.find(match=>match.id===id);
+  const index = Number(id.slice(1));
+  return knockoutMatches[index] || null;
+}
 
 function matchNames(id){
   if(id.startsWith("g")){
@@ -573,11 +661,51 @@ function matchNames(id){
   return koNames[id] || (fixture ? [fixture[2],fixture[3]] : ["Home","Away"]);
 }
 
+function matchMetaLine(id){
+  const fixture = matchFixture(id);
+  if(!fixture) return "";
+  const f = fmtDay(matchLocalDate(fixture));
+  return `${f.dow} ${f.mon} ${f.num} · ${etToLocal(fixture.date,fixture.time)} · ${fixture.time} ET · ${fixture.venue}`;
+}
+
 function localMatchStatus(id){
   const score = results[id]||["",""];
   const info = liveInfo[id];
   if(score[0]!==""&&score[1]!=="") return `${info?.label||"Score"} · ${score[0]}–${score[1]}`;
   return info?.label || "Goals and scorers from ESPN";
+}
+
+function goalMinuteNumber(event){
+  const display = event.clock?.displayValue || "";
+  const fromDisplay = display.match(/\d+/)?.[0];
+  if(fromDisplay) return Number(fromDisplay);
+  if(typeof event.clock?.value === "number") return Math.floor(event.clock.value/60);
+  return 0;
+}
+
+function renderGoalEvent(event,names){
+  const minute = event.clock?.displayValue || "—";
+  const scorer = event.participants?.[0]?.athlete?.displayName || event.shortText || "Goal";
+  const assist = event.participants?.[1]?.athlete?.displayName;
+  const type = event.type?.type || "goal";
+  const special = type==="own-goal" ? "Own goal" : event.shootout ? "Shootout" : "";
+  const eventTeam = resolveTeam(event.team?.displayName||"") || event.team?.displayName || "";
+  const side = eventTeam===names[1] ? "away" : "home";
+  return `<article class="goal-event ${side}">
+    <div class="goal-minute">${esc(minute)}</div>
+    <div class="goal-content">
+      <div class="goal-main">⚽ ${esc(scorer)}${special?`<span class="event-tag">${esc(special)}</span>`:""}</div>
+      ${event.team?.displayName?`<div class="goal-team">${esc(event.team.displayName)}</div>`:""}
+      ${assist?`<div class="goal-assist">Assist: ${esc(assist)}</div>`:""}
+    </div>
+  </article>`;
+}
+
+function renderGoalHalf(label,events,names,emptyText){
+  return `<div class="half-label"><span>${label}</span></div>` +
+    (events.length
+      ? events.map(event=>renderGoalEvent(event,names)).join("")
+      : `<div class="half-empty">${emptyText}</div>`);
 }
 
 function renderGoalEvents(data,id){
@@ -590,28 +718,16 @@ function renderGoalEvents(data,id){
 
   const names = matchNames(id);
   goalList.classList.add("has-goals");
-  const events = goals.map(event=>{
-    const minute = event.clock?.displayValue || "—";
-    const scorer = event.participants?.[0]?.athlete?.displayName || event.shortText || "Goal";
-    const assist = event.participants?.[1]?.athlete?.displayName;
-    const type = event.type?.type || "goal";
-    const special = type==="own-goal" ? "Own goal" : event.shootout ? "Shootout" : "";
-    const eventTeam = resolveTeam(event.team?.displayName||"") || event.team?.displayName || "";
-    const side = eventTeam===names[1] ? "away" : "home";
-    return `<article class="goal-event ${side}">
-      <div class="goal-minute">${esc(minute)}</div>
-      <div class="goal-content">
-        <div class="goal-main">⚽ ${esc(scorer)}${special?`<span class="event-tag">${esc(special)}</span>`:""}</div>
-        ${event.team?.displayName?`<div class="goal-team">${esc(event.team.displayName)}</div>`:""}
-        ${assist?`<div class="goal-assist">Assist: ${esc(assist)}</div>`:""}
-      </div>
-    </article>`;
-  }).join("");
+  const firstHalf = goals.filter(event=>goalMinuteNumber(event)<=45);
+  const secondHalf = goals.filter(event=>goalMinuteNumber(event)>45);
   goalList.innerHTML = `<div class="timeline-teams">
     <div class="timeline-team home">${FLAG[names[0]]||""} ${esc(names[0])}</div>
     <div></div>
     <div class="timeline-team away">${FLAG[names[1]]||""} ${esc(names[1])}</div>
-  </div>${events}`;
+  </div>
+  ${renderGoalHalf("First half",firstHalf,names,"No first-half goals")}
+  <div class="half-divider"><span>HT</span></div>
+  ${renderGoalHalf("Second half",secondHalf,names,"No second-half goals")}`;
 }
 
 async function loadMatchDetails(id,quiet=false){
@@ -645,6 +761,7 @@ function openMatchDetails(id,trigger){
   detailsReturnFocus = trigger;
   const names = matchNames(id);
   detailsTitle.textContent = `${names[0]} – ${names[1]}`;
+  detailsMeta.textContent = matchMetaLine(id);
   detailsModal.hidden = false;
   document.body.classList.add("modal-open");
   document.getElementById("detailsClose").focus();
@@ -689,6 +806,7 @@ document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click",()
 }));
 const sel=document.getElementById("fGroup");
 Object.keys(GROUPS).forEach(g=>{const o=document.createElement("option");o.value=g;o.textContent="Group "+g;sel.appendChild(o);});
+{const o=document.createElement("option");o.value="KO";o.textContent="Road to the Trophy";sel.appendChild(o);}
 sel.addEventListener("change",renderSchedule);
 document.getElementById("fTeam").addEventListener("input",renderSchedule);
 document.querySelectorAll("[data-schedule-view]").forEach(button=>button.addEventListener("click",()=>{
@@ -742,6 +860,18 @@ const resolveTeam = input=>{
 };
 const etDate = iso=>new Date(iso).toLocaleDateString("en-CA",{timeZone:"America/New_York"});
 
+function isHalftimeStatus(status){
+  const type = status?.type || {};
+  const text = [type.name,type.description,type.detail,type.shortDetail]
+    .filter(Boolean).join(" ").toLowerCase();
+  return text.includes("halftime") || /\bht\b/.test(text);
+}
+
+function liveLabel(comp){
+  if(isHalftimeStatus(comp.status)) return "Half-time";
+  return "LIVE "+(comp.status.displayClock||"");
+}
+
 function applyEvent(matchId, comp){
   const st = comp.status?.type||{};
   if(st.state==="pre") return false;
@@ -749,7 +879,7 @@ function applyEvent(matchId, comp){
   const away = comp.competitors.find(c=>c.homeAway==="away")||comp.competitors[1];
   results[matchId] = [String(home.score??""),String(away.score??"")];
   liveInfo[matchId] = st.state==="in"
-    ? {live:true, label:"LIVE "+(comp.status.displayClock||"")}
+    ? {live:true, label:liveLabel(comp)}
     : {live:false, label:"FT"};
   return true;
 }
