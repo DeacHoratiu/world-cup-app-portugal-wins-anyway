@@ -87,10 +87,11 @@
   .score .sv{width:46px;text-align:center;font:700 16px var(--mono);padding:4px 0;
       border-radius:6px;background:rgba(16,32,25,.05);color:var(--ink)}
   .score .sv.empty{color:rgba(16,32,25,.25)}
+  .score .pen{font:800 10px var(--mono);color:var(--pitch);margin-left:2px;vertical-align:4px}
   .match.played .score .sv{background:#fff;box-shadow:inset 0 0 0 1px var(--line)}
   .match.played{border-left:5px solid var(--pitch)}
   .match.played .winner{color:var(--pitch-dk)}
-  .match.played .winner::after{content:"●";color:var(--gold);font-size:9px;margin-left:6px;vertical-align:2px}
+  .match.played .winner::after{content:"";display:none}
   .match[role="button"]{cursor:pointer}
   .match[role="button"]:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
 
@@ -111,6 +112,8 @@
   .modal-close:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
   .modal-body{padding:18px 20px 22px}
   .details-status{font:600 12px var(--mono);color:rgba(16,32,25,.62);margin-bottom:6px}
+  .details-status .pen-status{display:inline-block;margin-left:8px;padding:2px 6px;border-radius:4px;
+      background:var(--pitch);color:#fff;font-weight:800}
   .details-meta{font:600 11px/1.5 var(--mono);color:rgba(16,32,25,.72);margin-bottom:16px;
       padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
   .goal-list{position:relative}
@@ -163,21 +166,22 @@
   .round h2{font-family:var(--display);font-size:22px;letter-spacing:.05em;text-transform:uppercase;
       color:var(--chalk);margin-bottom:12px}
   .round h2 span{color:var(--gold)}
-  .bracket-board{display:grid;grid-template-columns:repeat(5,minmax(188px,1fr));gap:12px;
+  .bracket-board{display:grid;grid-template-columns:repeat(5,minmax(250px,1fr));gap:14px;
       align-items:start;overflow-x:auto;padding:6px 2px 18px;scroll-snap-type:x proximity}
   .bracket-column{scroll-snap-align:start;position:relative}
   .bracket-column h2{padding:8px 0 12px}
   .bracket-stack{display:flex;flex-direction:column;gap:12px;padding-top:2px}
-  .bracket-match{position:relative;grid-template-columns:44px 1fr 38px;gap:8px;padding:10px}
+  .bracket-match{position:relative;grid-template-columns:48px 1fr 44px;gap:10px;padding:11px 12px}
   .bracket-match .gchip{font-size:11px;padding:6px 0}
-  .bracket-match .trow{font-size:13px;gap:6px}
+  .bracket-match .trow{font-size:14px;gap:6px}
   .bracket-match .slot{display:block;min-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .bracket-match .meta{font-size:10px;line-height:1.35}
-  .bracket-match .score .sv{width:36px;font-size:14px;padding:3px 0}
+  .bracket-match .score .sv{width:42px;font-size:14px;padding:3px 0}
+  .bracket-match .score .pen{font-size:9px}
   .bracket-column:not(.trophy-column) .bracket-match::after{
-      content:"";position:absolute;right:-12px;top:50%;width:12px;height:2px;background:rgba(230,177,60,.42)}
+      content:"";position:absolute;right:-14px;top:50%;width:14px;height:2px;background:rgba(230,177,60,.42)}
   .bracket-column:not(.trophy-column)::after{
-      content:"";position:absolute;right:-12px;top:70px;bottom:22px;width:2px;background:linear-gradient(rgba(230,177,60,.08),rgba(230,177,60,.32),rgba(230,177,60,.08))}
+      content:"";position:absolute;right:-14px;top:70px;bottom:22px;width:2px;background:linear-gradient(rgba(230,177,60,.08),rgba(230,177,60,.32),rgba(230,177,60,.08))}
   .bracket-column[data-round="R16"] .bracket-stack{padding-top:28px;gap:34px}
   .bracket-column[data-round="QF"] .bracket-stack{padding-top:82px;gap:86px}
   .bracket-column[data-round="SF"] .bracket-stack{padding-top:178px;gap:190px}
@@ -437,15 +441,19 @@ const ROUND_NAME = {R32:"Round of 32",R16:"Round of 16",QF:"Quarterfinals",SF:"S
 
 /* ================= STATE ================= */
 const results = {}; // matchId -> [h,a]
-const liveInfo = {}; // matchId -> {label:"LIVE 63'"|"FT", live:bool}
+const shootouts = {}; // matchId -> [h,a] penalty shootout score, when available
+const matchWinners = {}; // matchId -> "home"|"away" once ESPN marks a winner
+const liveInfo = {}; // matchId -> {label:"LIVE 63'"|"Half-time"|"FT-Pens"|"FT", live:bool}
 const koNames = {}; // knockout matchId -> [home,away] once known
 const espnIds = {}; // local matchId -> ESPN event id
 const matches = M.map((m,i)=>({id:"g"+i,date:m[0],group:m[1],home:m[2],away:m[3],time:m[4],venue:m[5]}));
+const koRoundCounts = {};
 const knockoutMatches = KO.map((k,i)=>({
   id:"k"+i,
   date:k[0],
   group:"KO",
   round:k[1],
+  roundIndex:koRoundCounts[k[1]] = (koRoundCounts[k[1]]||0) + 1,
   home:k[2],
   away:k[3],
   time:k[4],
@@ -490,9 +498,58 @@ const matchKickoff = match=>etKickoffDate(match.date,match.time);
 function scheduleTeams(match){
   if(match.knockout){
     const names = koNames[match.id];
-    return names?.length===2 ? names : [match.home,match.away];
+    return (names?.length===2 ? names : [match.home,match.away]).map(resolveAdvancementName);
   }
   return [match.home,match.away];
+}
+
+function winnerSide(id,score){
+  if(matchWinners[id]) return matchWinners[id];
+  if(!score||score[0]===""||score[1]===""||+score[0]===+score[1]) return "";
+  return +score[0]>+score[1] ? "home" : "away";
+}
+
+function penaltyScore(id,index){
+  const pens = shootouts[id];
+  return pens&&pens[index]!=="" ? `<span class="pen">(${esc(pens[index])})</span>` : "";
+}
+
+function penaltyStatus(id){
+  const pens = shootouts[id];
+  return pens&&pens[0]!==""&&pens[1]!=="" ? `<span class="pen-status">Pen: ${esc(pens[0])} - ${esc(pens[1])}</span>` : "";
+}
+
+function flipMatchOrientation(id){
+  if(results[id]) results[id].reverse();
+  if(shootouts[id]) shootouts[id].reverse();
+  if(matchWinners[id]==="home") matchWinners[id] = "away";
+  else if(matchWinners[id]==="away") matchWinners[id] = "home";
+}
+
+function koWinnerName(round,index){
+  const match = knockoutMatches.find(m=>m.round===round&&m.roundIndex===index);
+  const side = match&&matchWinners[match.id];
+  if(!match||!side) return null;
+  const names = koNames[match.id] || [match.home,match.away];
+  return resolveAdvancementName(names[side==="home" ? 0 : 1]);
+}
+
+function resolveAdvancementName(name){
+  const value = String(name||"");
+  const patterns = [
+    {round:"R32", re:/(?:Round of 32|R32|RD32)\s*(?:W)?\s*(\d+)\s*(?:Winner|W)?/i},
+    {round:"R16", re:/(?:Round of 16|R16|RD16)\s*(?:W)?\s*(\d+)\s*(?:Winner|W)?/i},
+    {round:"QF", re:/(?:Quarterfinal|QF)\s*(?:W)?\s*(\d+)\s*(?:Winner|W)?/i},
+    {round:"SF", re:/(?:Semifinal|SF)\s*(?:W)?\s*(\d+)\s*(?:Winner|W)?/i}
+  ];
+  for(const pattern of patterns){
+    const match = value.match(pattern.re);
+    if(match){
+      const winner = koWinnerName(pattern.round,Number(match[1]));
+      if(winner) return winner;
+    }
+  }
+  return value;
 }
 
 function scheduleSort(a,b){
@@ -545,7 +602,8 @@ function renderSchedule(){
 function matchCard(m){
   const r = results[m.id]||["",""];
   const played = r[0]!==""&&r[1]!=="";
-  const hWin = played&&+r[0]>+r[1], aWin = played&&+r[1]>+r[0];
+  const win = winnerSide(m.id,r);
+  const hWin = played&&win==="home", aWin = played&&win==="away";
   const [home,away] = scheduleTeams(m);
   const chip = m.knockout ? (m.round==="FIN"?"🏆":m.round) : `GRP ${m.group}`;
   const chipClass = m.knockout ? "gchip ko" : "gchip";
@@ -557,8 +615,8 @@ function matchCard(m){
       <div class="meta">${etToLocal(m.date, m.time)} · ${m.time} ET · ${esc(m.venue)}${badge(m.id)}</div>
     </div>
     <div class="score">
-      <div class="sv${r[0]===""?" empty":""}" aria-label="${esc(home)} goals">${r[0]===""?"–":r[0]}</div>
-      <div class="sv${r[1]===""?" empty":""}" aria-label="${esc(away)} goals">${r[1]===""?"–":r[1]}</div>
+      <div class="sv${r[0]===""?" empty":""}" aria-label="${esc(home)} goals">${r[0]===""?"–":r[0]}${penaltyScore(m.id,0)}</div>
+      <div class="sv${r[1]===""?" empty":""}" aria-label="${esc(away)} goals">${r[1]===""?"–":r[1]}${penaltyScore(m.id,1)}</div>
     </div>
   </div>`;
 }
@@ -605,22 +663,24 @@ function renderKnockout(){
   const card = (k,r)=>{
     const localDate = localDateKey(etKickoffDate(k.date,k.time));
     const f = fmtDay(localDate), res = results[k.id]||["",""];
-    const names = koNames[k.id]||[];
+    const names = (koNames[k.id]||[]).map(resolveAdvancementName);
     const detailLabel = names.length===2 ? `${names[0]} versus ${names[1]}` : `${k.h} versus ${k.a}`;
     const home = compactKoLabel(names[0]||"");
     const away = compactKoLabel(names[1]||"");
     const homePh = compactKoLabel(k.h);
     const awayPh = compactKoLabel(k.a);
-    return `<div class="match bracket-match" data-id="${k.id}" role="button" tabindex="0" aria-label="View details for ${esc(detailLabel)}">
+    const played = res[0]!==""&&res[1]!=="";
+    const win = winnerSide(k.id,res);
+    return `<div class="match bracket-match${played?" played":""}" data-id="${k.id}" role="button" tabindex="0" aria-label="View details for ${esc(detailLabel)}">
       <div class="gchip ko">${r==="FIN"?"🏆":r}</div>
       <div class="teams">
-        <div class="trow"><span class="slot" data-ph="${esc(homePh)}">${esc(home)}</span></div>
-        <div class="trow"><span class="slot" data-ph="${esc(awayPh)}">${esc(away)}</span></div>
+        <div class="trow${played&&win==="home"?" winner":""}"><span class="slot" data-ph="${esc(homePh)}">${esc(home)}</span></div>
+        <div class="trow${played&&win==="away"?" winner":""}"><span class="slot" data-ph="${esc(awayPh)}">${esc(away)}</span></div>
         <div class="meta">${f.dow} ${f.mon} ${f.num} · ${etToLocal(k.date,k.time)}${badge(k.id)}</div>
       </div>
       <div class="score">
-        <div class="sv${res[0]===""?" empty":""}">${res[0]===""?"–":res[0]}</div>
-        <div class="sv${res[1]===""?" empty":""}">${res[1]===""?"–":res[1]}</div>
+        <div class="sv${res[0]===""?" empty":""}">${res[0]===""?"–":res[0]}${penaltyScore(k.id,0)}</div>
+        <div class="sv${res[1]===""?" empty":""}">${res[1]===""?"–":res[1]}${penaltyScore(k.id,1)}</div>
       </div>
     </div>`;
   };
@@ -658,7 +718,7 @@ function matchNames(id){
   }
   const index = Number(id.slice(1));
   const fixture = KO[index];
-  return koNames[id] || (fixture ? [fixture[2],fixture[3]] : ["Home","Away"]);
+  return (koNames[id] || (fixture ? [fixture[2],fixture[3]] : ["Home","Away"])).map(resolveAdvancementName);
 }
 
 function matchMetaLine(id){
@@ -671,7 +731,10 @@ function matchMetaLine(id){
 function localMatchStatus(id){
   const score = results[id]||["",""];
   const info = liveInfo[id];
-  if(score[0]!==""&&score[1]!=="") return `${info?.label||"Score"} · ${score[0]}–${score[1]}`;
+  if(score[0]!==""&&score[1]!==""){
+    const label = shootouts[id] ? "After Pens" : (info?.label||"Score");
+    return `${label} · ${score[0]}–${score[1]} ${penaltyStatus(id)}`;
+  }
   return info?.label || "Goals and scorers from ESPN";
 }
 
@@ -747,7 +810,7 @@ async function loadMatchDetails(id,quiet=false){
     if(!response.ok) throw new Error("HTTP "+response.status);
     const data = await response.json();
     if(activeDetailsId!==id) return;
-    detailsStatus.textContent = localMatchStatus(id);
+    detailsStatus.innerHTML = localMatchStatus(id);
     renderGoalEvents(data,id);
   }catch(error){
     if(activeDetailsId!==id) return;
@@ -872,15 +935,34 @@ function liveLabel(comp){
   return "LIVE "+(comp.status.displayClock||"");
 }
 
+function finalLabel(comp){
+  const type = comp.status?.type || {};
+  const text = [type.name,type.description,type.detail,type.shortDetail]
+    .filter(Boolean).join(" ").toLowerCase();
+  if(text.includes("pen")) return "FT-Pens";
+  if(text.includes("aet")||text.includes("extra time")) return "AET";
+  return type.shortDetail || type.detail || "FT";
+}
+
 function applyEvent(matchId, comp){
   const st = comp.status?.type||{};
   if(st.state==="pre") return false;
   const home = comp.competitors.find(c=>c.homeAway==="home")||comp.competitors[0];
   const away = comp.competitors.find(c=>c.homeAway==="away")||comp.competitors[1];
   results[matchId] = [String(home.score??""),String(away.score??"")];
+  const homeShootout = home.shootoutScore;
+  const awayShootout = away.shootoutScore;
+  if(homeShootout!=null||awayShootout!=null){
+    shootouts[matchId] = [String(homeShootout??""),String(awayShootout??"")];
+  }else{
+    delete shootouts[matchId];
+  }
+  if(home.winner) matchWinners[matchId] = "home";
+  else if(away.winner) matchWinners[matchId] = "away";
+  else delete matchWinners[matchId];
   liveInfo[matchId] = st.state==="in"
     ? {live:true, label:liveLabel(comp)}
-    : {live:false, label:"FT"};
+    : {live:false, label:finalLabel(comp)};
   return true;
 }
 
@@ -911,7 +993,7 @@ async function syncScores(manual){
         espnIds[gm.id] = String(ev.id);
         // respect fixture orientation if API flips home/away
         const flip = gm.home!==h;
-        if(applyEvent(gm.id,comp)&&flip) results[gm.id].reverse();
+        if(applyEvent(gm.id,comp)&&flip) flipMatchOrientation(gm.id);
         if(results[gm.id]) applied++;
         continue;
       }
